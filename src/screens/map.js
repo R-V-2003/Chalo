@@ -342,11 +342,39 @@ function showExpandedRoute(screen, route, allRoutes) {
   list.appendChild(allBtn);
 }
 
+// Animation Helpers
+function getDistance(p1, p2) {
+  if (!p1 || !p2) return 0;
+  const R = 6371e3; // meters
+  const φ1 = p1[0] * Math.PI / 180;
+  const φ2 = p2[0] * Math.PI / 180;
+  const Δφ = (p2[0] - p1[0]) * Math.PI / 180;
+  const Δλ = (p2[1] - p1[1]) * Math.PI / 180;
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function getPathMetadata(path) {
+  let totalDist = 0;
+  const dists = [0];
+  for (let i = 0; i < path.length - 1; i++) {
+    const d = getDistance(path[i], path[i+1]);
+    totalDist += d;
+    dists.push(totalDist);
+  }
+  return { totalDist, dists };
+}
+
 let animationFrameId = null;
 let lastTime = 0;
+const SHUTTLE_SPEED_MPS = 9.7; // ~35 km/h
 
 function startAutoAnimation() {
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  lastTime = 0;
 
   function animate(time) {
     if (!lastTime) lastTime = time;
@@ -356,21 +384,35 @@ function startAutoAnimation() {
     autoMarkers.forEach(item => {
       if (!item.path || item.path.length < 2) return;
       
-      const p1 = item.path[Math.floor(item.pathIndex)];
-      const p2 = item.path[Math.ceil(item.pathIndex) % item.path.length];
-      
-      if (p1 && p2 && p1 !== p2) {
-        const factor = item.pathIndex - Math.floor(item.pathIndex);
+      // Initialize distance metadata if missing
+      if (!item.meta) {
+        item.meta = getPathMetadata(item.path);
+        // Start at a random point along the route for variety
+        item.currentDist = (item.pathIndex || 0) * (item.meta.totalDist / item.path.length);
+      }
+
+      // Move forward by distance (speed * time)
+      item.currentDist += SHUTTLE_SPEED_MPS * (delta / 1000);
+      if (item.currentDist >= item.meta.totalDist) {
+        item.currentDist = 0;
+      }
+
+      // Find the segment we are in
+      let i = 0;
+      while (i < item.meta.dists.length - 2 && item.meta.dists[i+1] < item.currentDist) {
+        i++;
+      }
+
+      const p1 = item.path[i];
+      const p2 = item.path[i+1];
+      const segmentDist = item.meta.dists[i+1] - item.meta.dists[i];
+      const distInSegment = item.currentDist - item.meta.dists[i];
+      const factor = segmentDist > 0 ? distInSegment / segmentDist : 0;
+
+      if (p1 && p2) {
         const lat = p1[0] + (p2[0] - p1[0]) * factor;
         const lng = p1[1] + (p2[1] - p1[1]) * factor;
         item.marker.setLatLng([lat, lng]);
-      } else {
-        item.marker.setLatLng(p1);
-      }
-      
-      item.pathIndex += 0.0001 * (delta || 16); 
-      if (item.pathIndex >= item.path.length) {
-        item.pathIndex = 0;
       }
     });
 
