@@ -368,7 +368,7 @@ function startAutoAnimation() {
         item.marker.setLatLng(p1);
       }
       
-      item.pathIndex += 0.001 * (delta || 16); 
+      item.pathIndex += 0.0001 * (delta || 16); 
       if (item.pathIndex >= item.path.length) {
         item.pathIndex = 0;
       }

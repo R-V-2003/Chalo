@@ -80,22 +80,17 @@ db.exec(`
 `);
 
 // Seed data if tables are empty
-function seedIfEmpty() {
-  const routeCount = db.prepare('SELECT COUNT(*) as c FROM routes').get().c;
-  if (routeCount > 0) return;
+  // Force re-seed for this update by checking if we have the new route resolution
+  const hasHighRes = db.prepare('SELECT COUNT(*) as c FROM path_points').get().c > 100;
+  if (hasHighRes) return;
 
-  console.log('Seeding database with Ahmedabad routes...');
+  console.log('Clearing old data and seeding database with high-resolution Ahmedabad routes...');
+  db.exec('DELETE FROM path_points; DELETE FROM stops; DELETE FROM drivers; DELETE FROM routes;');
 
   const insertRoute = db.prepare('INSERT INTO routes (name, fare, distance, duration, color) VALUES (?, ?, ?, ?, ?)');
   const insertStop = db.prepare('INSERT INTO stops (route_id, name, lat, lng, passengers, distance_label, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  const insertPath = db.prepare('INSERT INTO path_points (route_id, lat, lng, sort_order) VALUES (?, ?, ?, ?)');
+  const insertPath = db.prepare('INSERT INTO path_points (route_id, lat, lng, sort_order) VALUES (?, ?, ?, ?, ?)');
   const insertDriver = db.prepare('INSERT INTO drivers (name, vehicle_number, rating, total_rides, profile_photo, route_id) VALUES (?, ?, ?, ?, ?, ?)');
-  
-  // Create test users (hashed password 'password123' via bcrypt)
-  // To avoid slowing down the seed, we do a basic hash or plain stub. 
-  // For the demo, we'll store unhashed basic stub and just accept it in the login API since bcrypt is async and our seed is sync.
-  // Actually, we'll import bcrypt in apiAuth.js. Here we'll just insert a bcrypt hash of "password":
-  // $2a$10$wT/t.tOfx.O2e/d5r3R/P.Q5x2Y0yH9wI/7lB8PxyfS2jG5.gMzXm
   const insertUser = db.prepare('INSERT INTO users (name, phone, password_hash, role, profile_photo) VALUES (?, ?, ?, ?, ?)');
 
   const seedRoutes = [
@@ -107,7 +102,12 @@ function seedIfEmpty() {
         { name: 'Drive-in Road', lat: 23.0465, lng: 72.5335, passengers: 2, distance_label: '2.5 km' },
         { name: 'Thaltej', lat: 23.0520, lng: 72.5080, passengers: 0, distance_label: '5.2 km' },
       ],
-      path: [[23.0339,72.5467],[23.0345,72.5420],[23.0365,72.5395],[23.0400,72.5370],[23.0440,72.5350],[23.0465,72.5335],[23.0490,72.5270],[23.0510,72.5150],[23.0520,72.5080]],
+      path: [
+        [23.0339, 72.5467], [23.0345, 72.5450], [23.0350, 72.5435], [23.0355, 72.5420], [23.0360, 72.5410], [23.0365, 72.5400],
+        [23.0365, 72.5395], [23.0380, 72.5385], [23.0400, 72.5370], [23.0425, 72.5355], [23.0440, 72.5350], [23.0455, 72.5345],
+        [23.0465, 72.5335], [23.0475, 72.5315], [23.0490, 72.5270], [23.0500, 72.5220], [23.0510, 72.5150], [23.0515, 72.5110],
+        [23.0520, 72.5080]
+      ],
       driver: { name: 'Ashok R', vehicleNumber: 'GJ01BX1234', rating: 4.2, totalRides: 1580, profilePhoto: 'https://randomuser.me/api/portraits/men/60.jpg' }
     },
     {
@@ -118,7 +118,11 @@ function seedIfEmpty() {
         { name: 'Vijay Cross Roads', lat: 23.0350, lng: 72.5350, passengers: 1, distance_label: '2.8 km' },
         { name: 'Satellite Road', lat: 23.0260, lng: 72.5140, passengers: 0, distance_label: '4.8 km' },
       ],
-      path: [[23.0400,72.5550],[23.0415,72.5510],[23.0420,72.5480],[23.0400,72.5420],[23.0370,72.5380],[23.0350,72.5350],[23.0320,72.5280],[23.0290,72.5200],[23.0260,72.5140]],
+      path: [
+        [23.0400, 72.5550], [23.0410, 72.5535], [23.0415, 72.5510], [23.0418, 72.5495], [23.0420, 72.5480], [23.0415, 72.5460],
+        [23.0400, 72.5420], [23.0385, 72.5395], [23.0370, 72.5380], [23.0360, 72.5365], [23.0350, 72.5350], [23.0335, 72.5320],
+        [23.0320, 72.5280], [23.0305, 72.5240], [23.0290, 72.5200], [23.0275, 72.5170], [23.0260, 72.5140]
+      ],
       driver: { name: 'Ramesh Patel', vehicleNumber: 'GJ01CK5678', rating: 4.5, totalRides: 2340, profilePhoto: 'https://randomuser.me/api/portraits/men/43.jpg' }
     },
     {
@@ -129,7 +133,10 @@ function seedIfEmpty() {
         { name: 'Vastrapur Lake', lat: 23.0310, lng: 72.5230, passengers: 1, distance_label: '3.0 km' },
         { name: 'Vastrapur', lat: 23.0290, lng: 72.5180, passengers: 0, distance_label: '3.5 km' },
       ],
-      path: [[23.0370,72.5400],[23.0355,72.5370],[23.0340,72.5330],[23.0330,72.5290],[23.0310,72.5230],[23.0290,72.5180]],
+      path: [
+        [23.0370, 72.5400], [23.0362, 72.5385], [23.0355, 72.5370], [23.0348, 72.5350], [23.0340, 72.5330], [23.0335, 72.5310],
+        [23.0330, 72.5290], [23.0320, 72.5260], [23.0310, 72.5230], [23.0300, 72.5205], [23.0290, 72.5180]
+      ],
       driver: { name: 'Suresh Kumar', vehicleNumber: 'GJ01DL9012', rating: 3.8, totalRides: 890, profilePhoto: 'https://randomuser.me/api/portraits/men/75.jpg' }
     },
     {
@@ -140,7 +147,11 @@ function seedIfEmpty() {
         { name: 'CG Road', lat: 23.0280, lng: 72.5580, passengers: 1, distance_label: '2.8 km' },
         { name: 'Navrangpura', lat: 23.0330, lng: 72.5560, passengers: 0, distance_label: '4.0 km' },
       ],
-      path: [[23.0170,72.5650],[23.0195,72.5635],[23.0220,72.5620],[23.0250,72.5600],[23.0280,72.5580],[23.0305,72.5570],[23.0330,72.5560]],
+      path: [
+        [23.0170, 72.5650], [23.0182, 72.5642], [23.0195, 72.5635], [23.0210, 72.5628], [23.0220, 72.5620], [23.0235, 72.5610],
+        [23.0250, 72.5600], [23.0265, 72.5590], [23.0280, 72.5580], [23.0292, 72.5575], [23.0305, 72.5570], [23.0318, 72.5565],
+        [23.0330, 72.5560]
+      ],
       driver: { name: 'Vikram Singh', vehicleNumber: 'GJ01AM3456', rating: 4.7, totalRides: 3200, profilePhoto: 'https://randomuser.me/api/portraits/men/70.jpg' }
     },
     {
@@ -152,7 +163,11 @@ function seedIfEmpty() {
         { name: 'Bodakdev', lat: 23.0380, lng: 72.5100, passengers: 1, distance_label: '5.5 km' },
         { name: 'SG Highway', lat: 23.0370, lng: 72.4980, passengers: 0, distance_label: '7.5 km' },
       ],
-      path: [[23.0250,72.5700],[23.0270,72.5660],[23.0300,72.5620],[23.0320,72.5590],[23.0339,72.5562],[23.0350,72.5450],[23.0360,72.5300],[23.0380,72.5100],[23.0370,72.4980]],
+      path: [
+        [23.0250, 72.5700], [23.0260, 72.5680], [23.0270, 72.5660], [23.0285, 72.5640], [23.0300, 72.5620], [23.0310, 72.5605],
+        [23.0320, 72.5590], [23.0330, 72.5576], [23.0339, 72.5562], [23.0345, 72.5506], [23.0350, 72.5450], [23.0355, 72.5375],
+        [23.0360, 72.5300], [23.0370, 72.5200], [23.0380, 72.5100], [23.0375, 72.5040], [23.0370, 72.4980]
+      ],
       driver: { name: 'Mehul Shah', vehicleNumber: 'GJ01BN7890', rating: 4.0, totalRides: 1120, profilePhoto: 'https://randomuser.me/api/portraits/men/33.jpg' }
     },
     {
@@ -163,7 +178,11 @@ function seedIfEmpty() {
         { name: 'Jamalpur', lat: 23.0150, lng: 72.5900, passengers: 3, distance_label: '3.0 km' },
         { name: 'Kalupur Station', lat: 23.0230, lng: 72.5830, passengers: 0, distance_label: '5.0 km' },
       ],
-      path: [[23.0050,72.6100],[23.0065,72.6060],[23.0080,72.6020],[23.0110,72.5960],[23.0150,72.5900],[23.0190,72.5860],[23.0230,72.5830]],
+      path: [
+        [23.0050, 72.6100], [23.0058, 72.6080], [23.0065, 72.6060], [23.0072, 72.6040], [23.0080, 72.6020], [23.0095, 72.5990],
+        [23.0110, 72.5960], [23.0130, 72.5930], [23.0150, 72.5900], [23.0170, 72.5880], [23.0190, 72.5860], [23.0210, 72.5845],
+        [23.0230, 72.5830]
+      ],
       driver: { name: 'Prakash Joshi', vehicleNumber: 'GJ01CP2345', rating: 4.3, totalRides: 1760, profilePhoto: 'https://randomuser.me/api/portraits/men/50.jpg' }
     }
   ];
