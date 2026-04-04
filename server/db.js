@@ -86,7 +86,7 @@ function seedIfEmpty() {
   if (hasHighRes) return;
 
   console.log('Clearing old data and seeding database with TRUE road-aligned Ahmedabad routes...');
-  db.exec('DELETE FROM path_points; DELETE FROM stops; DELETE FROM drivers; DELETE FROM routes;');
+  db.exec('DELETE FROM reviews; DELETE FROM path_points; DELETE FROM stops; DELETE FROM drivers; DELETE FROM users; DELETE FROM routes;');
 
   const insertRoute = db.prepare('INSERT INTO routes (name, fare, distance, duration, color) VALUES (?, ?, ?, ?, ?)');
   const insertStop = db.prepare('INSERT INTO stops (route_id, name, lat, lng, passengers, distance_label, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -160,8 +160,8 @@ function seedIfEmpty() {
     }
 
     // Seed Demo Users
-    insertUser.run('Rahul Passenger', '9876543210', '$2a$10$wT/t.tOfx.O2e/d5r3R/P.Q5x2Y0yH9wI/7lB8PxyfS2jG5.gMzXm', 'passenger', 'https://randomuser.me/api/portraits/men/55.jpg');
-    insertUser.run('Ashok Shuttle', '9998887776', '$2a$10$wT/t.tOfx.O2e/d5r3R/P.Q5x2Y0yH9wI/7lB8PxyfS2jG5.gMzXm', 'shuttle', 'https://randomuser.me/api/portraits/men/60.jpg');
+    insertUser.run('Rahul Passenger', '9876543210', '$2b$10$7ebvlcXx.PQBLLAzVJMH9u7YbDxwtWEgWpYK.FBAaq7R2mZRtQoUy', 'passenger', 'https://randomuser.me/api/portraits/men/55.jpg');
+    insertUser.run('Ashok Shuttle', '9998887776', '$2b$10$7ebvlcXx.PQBLLAzVJMH9u7YbDxwtWEgWpYK.FBAaq7R2mZRtQoUy', 'shuttle', 'https://randomuser.me/api/portraits/men/60.jpg');
   });
 
   seedAll();
