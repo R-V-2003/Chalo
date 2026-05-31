@@ -2,6 +2,8 @@
 
 ![Chalo App](https://raw.githubusercontent.com/R-V-2003/RAHUL_MALI_PORTFOLIO.github.io/main/chalo_card_image.png)
 
+**[Read the Full Case Study Here](https://r-v-2003.github.io/RAHUL_MALI_PORTFOLIO.github.io/case-study-chalo.html)** | **[Download Chalo APK](https://raw.githubusercontent.com/R-V-2003/RAHUL_MALI_PORTFOLIO.github.io/main/chalo.apk)**
+
 Chalo is a full-stack smart shuttle management and ride-hailing platform designed to bridge the gap between affordable shared transit and premium tech-enabled reliability. We bring real-time tracking, AI-assisted route planning, and digital transparency to the deeply unorganized shared-auto and shuttle sectors in fast-growing cities.
 
 ## 🌟 The Problem
