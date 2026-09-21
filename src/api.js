@@ -56,9 +56,86 @@ export const api = {
 
   // Shuttle Specific
   setShuttleRoute: (routeId) => request('/api/auth/shuttle/route', { method: 'POST', body: JSON.stringify({ routeId }) }),
+  updateOccupancy: (routeId, available, total = 4) => request(`/api/routes/${routeId}/occupancy`, {
+    method: 'PATCH',
+    body: JSON.stringify({ available, total })
+  }),
+
+  // Investor Analytics
+  getInvestorAnalytics: () => request('/api/analytics/investor'),
 
   // AI Smart Navigation Chat
-  chat: (message, history = []) => request('/api/chat', { method: 'POST', body: JSON.stringify({ message, history }) }),
+  chat: (message, history = [], userLocation = null) => request('/api/chat', { 
+    method: 'POST', 
+    body: JSON.stringify({ message, history, userLocation }) 
+  }),
+
+  // Pan-India Cities
+  getCities: () => request('/api/cities'),
+  getCity: (id) => request(`/api/cities/${id}`),
+
+  // Metro (Pan-India)
+  getMetroLines: (city) => request(`/api/metro/lines${city ? `?city=${encodeURIComponent(city)}` : ''}`),
+  getMetroStations: (lineId, city) => {
+    const params = new URLSearchParams();
+    if (lineId) params.append('line', lineId);
+    if (city) params.append('city', city);
+    const qs = params.toString();
+    return request(`/api/metro/stations${qs ? `?${qs}` : ''}`);
+  },
+  getMetroStation: (id) => request(`/api/metro/stations/${id}`),
+  getMetroFare: (from, to) => request(`/api/metro/fare?from=${from}&to=${to}`),
+  getNearbyMetro: (lat, lng, limit = 5) => request(`/api/metro/nearby?lat=${lat}&lng=${lng}&limit=${limit}`),
+  getMetroRoute: (from, to) => request(`/api/metro/route?from=${from}&to=${to}`),
+
+  // Trains (Pan-India & Suburban Locals)
+  getTrains: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.type) query.append('type', params.type);
+    if (params.city) query.append('city', params.city);
+    if (params.origin) query.append('origin', params.origin);
+    const qs = query.toString();
+    return request(`/api/trains${qs ? `?${qs}` : ''}`);
+  },
+  getSuburbanTrains: (city) => request(`/api/trains/suburban${city ? `?city=${encodeURIComponent(city)}` : ''}`),
+  searchTrains: (destination, from) => {
+    const params = new URLSearchParams();
+    if (destination) params.append('to', destination);
+    if (from) params.append('from', from);
+    return request(`/api/trains/search?${params.toString()}`);
+  },
+  getTrain: (id) => request(`/api/trains/${id}`),
+  getTrainFare: (id) => request(`/api/trains/fare/${id}`),
+  getNearbyRailway: (lat, lng) => request(`/api/trains/nearby?lat=${lat}&lng=${lng}`),
+
+  // BRTS (Pan-India)
+  getBrtsRoutes: (params = {}) => {
+    const query = new URLSearchParams();
+    if (typeof params === 'string') query.append('type', params);
+    else {
+      if (params.type) query.append('type', params.type);
+      if (params.city) query.append('city', params.city);
+    }
+    const qs = query.toString();
+    return request(`/api/brts/routes${qs ? `?${qs}` : ''}`);
+  },
+  getBrtsRoute: (id) => request(`/api/brts/routes/${id}`),
+  getBrtsStops: (routeId) => request(`/api/brts/stops${routeId ? `?route=${routeId}` : ''}`),
+
+  // State Bus Transport (All-India SRTCs)
+  getGsrtcRoutes: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.to) query.append('to', params.to);
+    if (params.type) query.append('type', params.type);
+    if (params.city) query.append('city', params.city);
+    if (params.state) query.append('state', params.state);
+    if (params.operator) query.append('operator', params.operator);
+    const qs = query.toString();
+    return request(`/api/gsrtc/routes${qs ? `?${qs}` : ''}`);
+  },
+  getGsrtcBusStands: (city) => request(`/api/gsrtc/bus-stands${city ? `?city=${encodeURIComponent(city)}` : ''}`),
+  getGsrtcOperators: () => request('/api/gsrtc/operators'),
+  getGsrtcRoute: (id) => request(`/api/gsrtc/routes/${id}`),
 
   // Health
   health: () => request('/api/health')

@@ -17,13 +17,48 @@ router.get('/', (req, res) => {
   const stopsStmt = db.prepare('SELECT * FROM stops WHERE route_id = ? ORDER BY sort_order');
   const pathStmt = db.prepare('SELECT lat, lng FROM path_points WHERE route_id = ? ORDER BY sort_order');
 
-  const result = routes.map(route => ({
-    ...route,
-    stops: stopsStmt.all(route.id),
-    path: pathStmt.all(route.id).map(p => [p.lat, p.lng])
-  }));
+  // In-memory / dynamic occupancy & reliability state
+  const occupancyMap = global.occupancyMap || (global.occupancyMap = {
+    1: { available: 2, total: 4 },
+    2: { available: 3, total: 4 },
+    3: { available: 1, total: 4 },
+    4: { available: 4, total: 4 },
+  });
+
+  const reliabilityMap = {
+    1: { score: 94, onTimeRate: 92, avgWaitMin: 3.2, frequency: 'Every 5 mins', status: 'High Frequency' },
+    2: { score: 88, onTimeRate: 86, avgWaitMin: 4.5, frequency: 'Every 8 mins', status: 'Moderate' },
+    3: { score: 96, onTimeRate: 95, avgWaitMin: 2.8, frequency: 'Every 4 mins', status: 'High Frequency' },
+    4: { score: 91, onTimeRate: 89, avgWaitMin: 4.0, frequency: 'Every 6 mins', status: 'High Frequency' },
+  };
+
+  const result = routes.map(route => {
+    const occ = occupancyMap[route.id] || { available: 2, total: 4 };
+    const rel = reliabilityMap[route.id] || { score: 90, onTimeRate: 88, avgWaitMin: 4.0, frequency: 'Every 6 mins', status: 'Normal' };
+    return {
+      ...route,
+      stops: stopsStmt.all(route.id),
+      path: pathStmt.all(route.id).map(p => [p.lat, p.lng]),
+      occupancy: occ,
+      reliability: rel,
+      smartPickupHint: route.stops && route.stops.length > 0 ? `Walk ~120m to ${route.stops[0].name} to save ₹5 and 4 mins` : null,
+      co2SavedKg: (route.distance * 0.18).toFixed(2) // 180g CO2 saved per passenger-km vs private taxi
+    };
+  });
 
   res.json(result);
+});
+
+// PATCH /api/routes/:id/occupancy - update route seat occupancy (Driver feature)
+router.patch('/:id/occupancy', (req, res) => {
+  const routeId = parseInt(req.params.id);
+  const { available, total } = req.body;
+  const occupancyMap = global.occupancyMap || (global.occupancyMap = {});
+  occupancyMap[routeId] = {
+    available: available !== undefined ? Math.max(0, Math.min(available, total || 4)) : 2,
+    total: total || 4
+  };
+  res.json({ success: true, routeId, occupancy: occupancyMap[routeId] });
 });
 
 // GET /api/routes/:id - single route with full data
@@ -31,9 +66,21 @@ router.get('/:id', (req, res) => {
   const route = db.prepare('SELECT * FROM routes WHERE id = ?').get(req.params.id);
   if (!route) return res.status(404).json({ error: 'Route not found' });
 
+  const occupancyMap = global.occupancyMap || {};
+  const occ = occupancyMap[route.id] || { available: 2, total: 4 };
+  const reliabilityMap = {
+    1: { score: 94, onTimeRate: 92, avgWaitMin: 3.2, frequency: 'Every 5 mins' },
+    2: { score: 88, onTimeRate: 86, avgWaitMin: 4.5, frequency: 'Every 8 mins' },
+    3: { score: 96, onTimeRate: 95, avgWaitMin: 2.8, frequency: 'Every 4 mins' },
+    4: { score: 91, onTimeRate: 89, avgWaitMin: 4.0, frequency: 'Every 6 mins' },
+  };
+
   route.stops = db.prepare('SELECT * FROM stops WHERE route_id = ? ORDER BY sort_order').all(route.id);
   route.path = db.prepare('SELECT lat, lng FROM path_points WHERE route_id = ? ORDER BY sort_order')
     .all(route.id).map(p => [p.lat, p.lng]);
+  route.occupancy = occ;
+  route.reliability = reliabilityMap[route.id] || { score: 90, onTimeRate: 88, avgWaitMin: 4.0, frequency: 'Every 6 mins' };
+  route.co2SavedKg = (route.distance * 0.18).toFixed(2);
 
   res.json(route);
 });

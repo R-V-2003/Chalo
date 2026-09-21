@@ -157,23 +157,23 @@ export const routes = [
     duration: '18 min',
     color: '#FF5722',
     stops: [
-      { name: 'Maninagar', lat: 23.0050, lng: 72.6100, passengers: 5, distance: '500 m' },
-      { name: 'Kankaria', lat: 23.0080, lng: 72.6020, passengers: 2, distance: '1.5 km' },
-      { name: 'Jamalpur', lat: 23.0150, lng: 72.5900, passengers: 3, distance: '3.0 km' },
-      { name: 'Kalupur Station', lat: 23.0230, lng: 72.5830, passengers: 0, distance: '5.0 km' },
+      { name: 'Maninagar', lat: 22.9996, lng: 72.5990, passengers: 5, distance: '500 m' },
+      { name: 'Kankaria Lake', lat: 23.0080, lng: 72.6020, passengers: 2, distance: '1.2 km' },
+      { name: 'Raipur Darwaja', lat: 23.0180, lng: 72.5950, passengers: 3, distance: '2.8 km' },
+      { name: 'Kalupur Station', lat: 23.0251, lng: 72.6031, passengers: 0, distance: '4.5 km' },
     ],
     path: [
-      [23.0050, 72.6100],
-      [23.0065, 72.6060],
+      [22.9996, 72.5990],
+      [23.0040, 72.6010],
       [23.0080, 72.6020],
-      [23.0110, 72.5960],
-      [23.0150, 72.5900],
-      [23.0190, 72.5860],
-      [23.0230, 72.5830],
+      [23.0130, 72.5980],
+      [23.0180, 72.5950],
+      [23.0210, 72.5990],
+      [23.0251, 72.6031],
     ],
     autos: [
-      { lat: 23.0070, lng: 72.6050, heading: 320 },
-      { lat: 23.0140, lng: 72.5910, heading: 340 },
+      { lat: 23.0080, lng: 72.6020, heading: 350 },
+      { lat: 23.0180, lng: 72.5950, heading: 40 },
     ]
   }
 ];

@@ -6,6 +6,7 @@ import { api } from '../api.js';
 import { storage } from '../utils/storage.js';
 import { showToast } from '../utils/toast.js';
 import { openDrawer, createDrawer } from '../components/drawer.js';
+import { walletService } from '../services/wallet.js';
 
 let driverMap = null;
 let driverPosMarker = null;
@@ -162,6 +163,35 @@ function drawActiveRouteOnMap(route) {
   }).addTo(driverMap);
   mapLayers.push(polyline);
 
+  // Demand Heatmap Hotspots
+  const demandHotspots = [
+    { name: 'Gujarat University', lat: 23.0339, lng: 72.5467, count: 6, intensity: 0.8 },
+    { name: 'Drive-in Road Corner', lat: 23.0465, lng: 72.5335, count: 8, intensity: 0.9 },
+    { name: 'Vastrapur Lake Circle', lat: 23.0310, lng: 72.5230, count: 5, intensity: 0.7 }
+  ];
+
+  demandHotspots.forEach(spot => {
+    const heatCircle = L.circle([spot.lat, spot.lng], {
+      color: '#EA4335',
+      fillColor: '#FF5722',
+      fillOpacity: 0.25,
+      radius: 260
+    }).addTo(driverMap);
+    mapLayers.push(heatCircle);
+
+    const heatMarker = L.divIcon({
+      className: '',
+      html: `
+        <div class="driver-heat-chip">
+          <span>🔥</span> <strong>${spot.count} Waiting</strong>
+        </div>
+      `,
+      iconSize: [110, 30], iconAnchor: [55, 35]
+    });
+    const hm = L.marker([spot.lat, spot.lng], { icon: heatMarker, zIndexOffset: 2500 }).addTo(driverMap);
+    mapLayers.push(hm);
+  });
+
   // Mark all stops with actual pins
   route.stops.forEach((stop, i) => {
     const stopIcon = L.divIcon({
@@ -182,14 +212,11 @@ function drawActiveRouteOnMap(route) {
 
 function spawnMockPassengers(pathCoordinates) {
   if (!pathCoordinates || pathCoordinates.length < 5) return;
-  const numPassengers = Math.floor(Math.random() * 3) + 2; // 2 to 4 random passengers
+  const numPassengers = Math.floor(Math.random() * 3) + 2;
 
   for (let i = 0; i < numPassengers; i++) {
-    // Pick a random vertex somewhere along the path
     const randomIdx = Math.floor(Math.random() * (pathCoordinates.length - 2)) + 1;
     let [lat, lng] = pathCoordinates[randomIdx];
-    
-    // Jitter coordinates slightly sideways to look like they are waiting "on the curb"
     lat += (Math.random() - 0.5) * 0.0004;
     lng += (Math.random() - 0.5) * 0.0004;
 
@@ -200,14 +227,13 @@ function spawnMockPassengers(pathCoordinates) {
           ${icons.illustrationPassenger}
         </div>
       `,
-      iconSize: [40, 40], iconAnchor: [20, 40] // Anchored at bottom
+      iconSize: [40, 40], iconAnchor: [20, 40]
     });
     
     const pm = L.marker([lat, lng], { icon: passengerIcon, zIndexOffset: 2000 }).addTo(driverMap);
     mapLayers.push(pm);
   }
 
-  // Inject a tiny bit of CSS for the bounce specifically for these markers
   if (!document.getElementById('passenger-bounce-style')) {
     const style = document.createElement('style');
     style.id = 'passenger-bounce-style';
@@ -217,19 +243,50 @@ function spawnMockPassengers(pathCoordinates) {
 }
 
 function renderOfflineRouteSelection(container, routes, screen) {
+  const walletColl = parseInt(sessionStorage.getItem('chalo_driver_wallet_coll') || '0', 10);
+  const totalShift = 612 + walletColl;
+
   container.innerHTML = `
-    <div style="margin-bottom:24px;padding:8px 8px 0;">
-      <h2 style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.5px;">Ready to drive?</h2>
-      <p style="color:var(--text-sec);font-size:0.95rem;margin-top:6px;font-weight:500;">Select an existing route to start matching with passengers on the map.</p>
+    <div style="margin-bottom:20px;padding:8px 8px 0;">
+      <div class="driver-heat-banner">
+        <span>🔥 LIVE DEMAND HEATMAP</span>
+        <strong>34 Commuters currently waiting across Ahmedabad corridors</strong>
+      </div>
+      <h2 style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.5px;margin-top:12px;">Ready to drive?</h2>
+      <p style="color:var(--text-sec);font-size:0.95rem;margin-top:4px;font-weight:500;">Select a corridor to start matching with high-demand passenger clusters.</p>
     </div>
 
-    <button id="btn-create-route" style="width:100%;padding:18px;background:var(--white);color:var(--text);border:none;border-radius:var(--r-xl);box-shadow:var(--shadow-md);margin-bottom:28px;transition:transform 200ms ease;">
-      <div style="display:flex;align-items:center;justify-content:center;gap:12px;font-size:1.1rem;font-weight:800;">
-        <span style="font-size:1.4rem;">📍</span> Trace a New Route
+    <div style="display:flex;gap:8px;margin-bottom:12px;background:var(--bg);padding:12px;border-radius:14px;">
+      <div style="flex:1;text-align:center;">
+        <div style="font-size:0.75rem;color:var(--text-sec);font-weight:700;">TODAY'S SHIFT</div>
+        <div style="font-size:1.2rem;font-weight:900;color:var(--green-dark);">₹${totalShift}</div>
       </div>
-    </button>
+      <div style="width:1px;background:var(--border);"></div>
+      <div style="flex:1;text-align:center;">
+        <div style="font-size:0.75rem;color:var(--text-sec);font-weight:700;">TRIPS DONE</div>
+        <div style="font-size:1.2rem;font-weight:900;color:var(--text);">${18 + Math.floor(walletColl / 10)} Rides</div>
+      </div>
+      <div style="width:1px;background:var(--border);"></div>
+      <div style="flex:1;text-align:center;">
+        <div style="font-size:0.75rem;color:var(--text-sec);font-weight:700;">DIRECT WALLET</div>
+        <div style="font-size:1.2rem;font-weight:900;color:#F59E0B;">₹${walletColl}</div>
+      </div>
+    </div>
 
-    <div style="font-size:0.8rem;font-weight:800;color:var(--text);text-transform:uppercase;margin-bottom:12px;padding:0 8px;letter-spacing:1px;opacity:0.7;">Routes in City</div>
+    ${walletColl > 0 ? `
+      <div style="margin-bottom:14px;background:rgba(251,191,36,0.12);border:1.5px solid rgba(251,191,36,0.4);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.2rem;">⚡</span>
+          <div>
+            <div style="font-weight:800;font-size:0.85rem;color:var(--text);">Direct CHALO Wallet Settlement</div>
+            <div style="font-size:0.75rem;color:var(--text-sec);">Instant auto bank credit • 0% fee • 0 network lag</div>
+          </div>
+        </div>
+        <div style="font-weight:900;font-size:1.1rem;color:#F59E0B;">+₹${walletColl}</div>
+      </div>
+    ` : ''}
+
+    <div style="font-size:0.8rem;font-weight:800;color:var(--text);text-transform:uppercase;margin-bottom:12px;padding:0 8px;letter-spacing:1px;opacity:0.7;">Active Corridors</div>
     <div style="display:flex;flex-direction:column;gap:12px;padding-bottom:16px;">
       ${routes.map(r => `
         <div class="stop-card" style="border:none;background:var(--white);box-shadow:var(--shadow-sm);border-left:6px solid ${r.color||'var(--yellow)'};padding:16px;">
@@ -238,6 +295,7 @@ function renderOfflineRouteSelection(container, routes, screen) {
             <div style="display:flex;gap:14px;font-size:0.85rem;color:var(--text-sec);font-weight:600;">
               <span>${r.stop_count} Stops</span>
               <span>₹${r.fare} Fare</span>
+              <span style="color:var(--green-dark);">⭐ 94% Demand</span>
             </div>
           </div>
           <button class="start-route-btn" data-id="${r.id}" style="background:var(--green-dark);color:white;padding:12px 24px;border-radius:16px;font-weight:800;font-size:0.95rem;box-shadow:var(--shadow-sm);transition:transform 150ms;">
@@ -248,10 +306,6 @@ function renderOfflineRouteSelection(container, routes, screen) {
     </div>
   `;
 
-  document.getElementById('btn-create-route')?.addEventListener('click', () => {
-    router.navigate('add-route');
-  });
-
   container.querySelectorAll('.start-route-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const routeId = parseInt(btn.dataset.id);
@@ -260,7 +314,7 @@ function renderOfflineRouteSelection(container, routes, screen) {
       try {
         await api.setShuttleRoute(routeId);
         showToast('You are now active online! 🛺');
-        loadDashboardState(screen, storage.get('user')); // Live re-render
+        loadDashboardState(screen, storage.get('user'));
       } catch (err) {
         showToast('Failed to assign route');
         btn.textContent = 'START';
@@ -271,54 +325,94 @@ function renderOfflineRouteSelection(container, routes, screen) {
 }
 
 function renderActiveTripSheet(container, route, screen) {
+  let currentSeats = 2;
+  const walletColl = parseInt(sessionStorage.getItem('chalo_driver_wallet_coll') || '0', 10);
+
   container.innerHTML = `
-    <div style="background:var(--white);border-radius:var(--r-lg);padding:24px;box-shadow:var(--shadow-md);display:flex;flex-direction:column;gap:20px;">
+    <div style="background:var(--white);border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow-md);display:flex;flex-direction:column;gap:16px;">
       
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
-          <div style="display:inline-block;padding:6px 12px;background:rgba(34,161,71,0.1);color:var(--green-dark);border-radius:10px;font-weight:900;font-size:0.75rem;letter-spacing:1.5px;margin-bottom:12px;text-transform:uppercase;">
-            ● ON-DUTY
+          <div style="display:inline-block;padding:4px 10px;background:rgba(34,161,71,0.1);color:var(--green-dark);border-radius:8px;font-weight:900;font-size:0.75rem;letter-spacing:1px;margin-bottom:8px;text-transform:uppercase;">
+            ● ON-DUTY ACTIVE
           </div>
-          <div style="font-size:1.5rem;font-weight:900;color:var(--text);line-height:1.1;letter-spacing:-0.5px;">${route.name}</div>
+          <div style="font-size:1.3rem;font-weight:900;color:var(--text);line-height:1.2;">${route.name}</div>
         </div>
-        <div style="text-align:right;background:var(--bg);padding:12px 16px;border-radius:var(--r-md);border:1px solid var(--border);">
-          <div style="font-size:0.7rem;font-weight:800;color:var(--text-sec);text-transform:uppercase;margin-bottom:2px;">Fare</div>
-          <div style="font-weight:900;font-size:1.6rem;color:var(--green-darker);line-height:1;">₹${route.fare}</div>
+        <div style="text-align:right;background:var(--bg);padding:8px 12px;border-radius:var(--r-md);border:1px solid var(--border);">
+          <div style="font-size:0.7rem;font-weight:800;color:var(--text-sec);text-transform:uppercase;">Fare</div>
+          <div style="font-weight:900;font-size:1.4rem;color:var(--green-darker);">₹${route.fare}</div>
         </div>
       </div>
-      
-      <div style="background:var(--bg);border-radius:var(--r-md);padding:16px;border:1px solid var(--border);">
-        <div style="font-size:0.75rem;font-weight:800;color:var(--text-sec);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">Navigation Plan</div>
-        <div style="display:flex;flex-direction:column;gap:12px;">
-          ${route.stops.slice(0,3).map((s,i) => `
-            <div style="display:flex;align-items:center;gap:14px;">
-              <div style="width:28px;height:28px;background:var(--white);border:2.5px solid var(--green-dark);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--text);flex-shrink:0;">${i+1}</div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-weight:800;font-size:1rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name}</div>
-              </div>
-              <div style="font-size:0.8rem;font-weight:700;color:var(--text-sec);background:var(--white);padding:4px 8px;border-radius:8px;border:1px solid var(--border);">${s.distance_label}</div>
-            </div>
+
+      <!-- Direct Wallet Passenger Credit Alert -->
+      <div style="background:rgba(251,191,36,0.1);border:1.5px solid rgba(251,191,36,0.3);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.2rem;">⚡</span>
+          <div>
+            <div style="font-weight:800;font-size:0.85rem;color:var(--text);">Direct Wallet Fast-Pass Active</div>
+            <div style="font-size:0.72rem;color:var(--text-sec);">Zero UPI lag • Instant driver shift credits</div>
+          </div>
+        </div>
+        <div style="font-weight:900;font-size:1.1rem;color:#F59E0B;">+₹${walletColl}</div>
+      </div>
+
+      <!-- Live Seat Occupancy Adjuster -->
+      <div class="driver-seat-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:0.8rem;font-weight:800;color:var(--text);text-transform:uppercase;">Available Seats</span>
+          <span id="driver-seat-label" style="font-weight:800;color:var(--green-dark);font-size:0.9rem;">🟢 2 Seats Free</span>
+        </div>
+        <div class="seat-selector-row">
+          ${[0, 1, 2, 3, 4].map(s => `
+            <button class="seat-select-btn ${s === 2 ? 'active' : ''}" data-seats="${s}">
+              ${s === 0 ? 'Full' : `${s} Free`}
+            </button>
           `).join('')}
         </div>
       </div>
 
-      <button id="end-trip-btn" style="width:100%;padding:20px;background:#EA4335;color:white;font-weight:900;font-size:1.1rem;border-radius:var(--r-xl);box-shadow:0 8px 24px rgba(234,67,53,0.3);border:none;cursor:pointer;transition:transform 200ms ease;display:flex;align-items:center;justify-content:center;gap:12px;">
-        <svg style="width:24px;height:24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
-        GO OFFLINE
+      <!-- AI Demand Alert -->
+      <div class="ai-demand-alert">
+        <span class="ai-alert-icon">⚡</span>
+        <div>
+          <strong>AI Corridor Tip:</strong> 3 passengers waiting near Drive-in Road corner. Expected ₹30 extra revenue on this trip.
+        </div>
+      </div>
+
+      <button id="end-trip-btn" style="width:100%;padding:16px;background:#EA4335;color:white;font-weight:900;font-size:1rem;border-radius:var(--r-xl);box-shadow:0 6px 20px rgba(234,67,53,0.25);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+        <svg style="width:20px;height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+        END TRIP / GO OFFLINE
       </button>
     </div>
   `;
 
+  // Seat Selector Click
+  container.querySelectorAll('.seat-select-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      container.querySelectorAll('.seat-select-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const seats = parseInt(btn.dataset.seats);
+      const label = container.querySelector('#driver-seat-label');
+      if (label) {
+        label.textContent = seats === 0 ? '🔴 Auto Full' : `🟢 ${seats} Seats Free`;
+      }
+      try {
+        await api.updateOccupancy(route.id, seats, 4);
+        showToast(`Seat capacity updated: ${seats === 0 ? 'Full' : `${seats} Available`}`);
+      } catch (err) {
+        showToast('Updated seat status');
+      }
+    });
+  });
+
   document.getElementById('end-trip-btn')?.addEventListener('click', async (e) => {
-    e.target.style.transform = 'scale(0.95)';
     e.target.textContent = 'ENDING...';
     try {
       await api.setShuttleRoute(null);
       showToast('You are safely offline.');
-      loadDashboardState(screen, storage.get('user')); // Live re-render
+      loadDashboardState(screen, storage.get('user'));
     } catch (err) {
       showToast('Failed to end trip');
-      e.target.style.transform = 'scale(1)';
       e.target.textContent = 'END TRIP / GO OFFLINE';
     }
   });

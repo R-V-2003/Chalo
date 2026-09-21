@@ -1,7 +1,8 @@
-// SQLite Database Setup + Seed Data
+// SQLite Database Setup + Comprehensive Pan-India Seed Data
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const transitData = require('./transitData');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -11,6 +12,14 @@ const db = new Database(path.join(DATA_DIR, 'chalo.db'));
 // Enable WAL mode for better perf
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+
+// Ensure schema migration for transit tables
+try {
+  const lineCols = db.prepare("PRAGMA table_info(metro_lines)").all().map(c => c.name);
+  if (lineCols.length > 0 && !lineCols.includes('city')) {
+    db.exec("DROP TABLE IF EXISTS metro_stations; DROP TABLE IF EXISTS metro_lines; DROP TABLE IF EXISTS brts_stops; DROP TABLE IF EXISTS brts_routes;");
+  }
+} catch (e) {}
 
 // Create tables
 db.exec(`
@@ -77,13 +86,201 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (driver_id) REFERENCES drivers(id) ON DELETE CASCADE
   );
+
+  -- Cities Table (Pan-India)
+  CREATE TABLE IF NOT EXISTS cities (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    state TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    has_metro INTEGER NOT NULL DEFAULT 0,
+    has_brts INTEGER NOT NULL DEFAULT 0,
+    has_suburban INTEGER NOT NULL DEFAULT 0,
+    has_state_bus INTEGER NOT NULL DEFAULT 1,
+    state_bus_corp TEXT NOT NULL DEFAULT 'SRTC'
+  );
+
+  -- Metro tables (Pan-India)
+  CREATE TABLE IF NOT EXISTS metro_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    city TEXT NOT NULL DEFAULT 'Ahmedabad',
+    state TEXT NOT NULL DEFAULT 'Gujarat',
+    system_name TEXT NOT NULL DEFAULT 'Metro Rail',
+    name TEXT NOT NULL,
+    code TEXT NOT NULL,
+    color TEXT NOT NULL,
+    from_station TEXT NOT NULL,
+    to_station TEXT NOT NULL,
+    total_stations INTEGER NOT NULL DEFAULT 0,
+    total_distance_km REAL NOT NULL DEFAULT 0,
+    operating_hours TEXT NOT NULL DEFAULT '06:00-22:00',
+    frequency_minutes INTEGER NOT NULL DEFAULT 8
+  );
+
+  CREATE TABLE IF NOT EXISTS metro_stations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    line_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    is_interchange INTEGER NOT NULL DEFAULT 0,
+    interchange_line_id INTEGER,
+    zone TEXT DEFAULT '',
+    FOREIGN KEY (line_id) REFERENCES metro_lines(id) ON DELETE CASCADE,
+    FOREIGN KEY (interchange_line_id) REFERENCES metro_lines(id) ON DELETE SET NULL
+  );
+
+  -- Train tables (Pan-India)
+  CREATE TABLE IF NOT EXISTS trains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    train_number TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'Express',
+    from_station TEXT NOT NULL,
+    to_station TEXT NOT NULL,
+    departure_time TEXT NOT NULL,
+    arrival_time TEXT NOT NULL,
+    duration TEXT NOT NULL,
+    distance_km REAL NOT NULL DEFAULT 0,
+    runs_on TEXT NOT NULL DEFAULT 'Daily',
+    platform TEXT DEFAULT '',
+    fare_sleeper INTEGER DEFAULT 0,
+    fare_3ac INTEGER DEFAULT 0,
+    fare_2ac INTEGER DEFAULT 0,
+    fare_1ac INTEGER DEFAULT 0,
+    fare_chair_car INTEGER DEFAULT 0,
+    fare_exec_chair INTEGER DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS train_stops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    train_id INTEGER NOT NULL,
+    station_name TEXT NOT NULL,
+    station_code TEXT NOT NULL DEFAULT '',
+    arrival_time TEXT DEFAULT '',
+    departure_time TEXT DEFAULT '',
+    day INTEGER NOT NULL DEFAULT 1,
+    distance_km REAL NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    lat REAL DEFAULT 0,
+    lng REAL DEFAULT 0,
+    FOREIGN KEY (train_id) REFERENCES trains(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS railway_stations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    code TEXT NOT NULL UNIQUE,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    city TEXT NOT NULL DEFAULT 'Ahmedabad',
+    state TEXT NOT NULL DEFAULT 'Gujarat'
+  );
+
+  -- Suburban & Local Trains (Mumbai, Kolkata, Chennai, Delhi)
+  CREATE TABLE IF NOT EXISTS suburban_trains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    city TEXT NOT NULL,
+    system TEXT NOT NULL,
+    name TEXT NOT NULL,
+    route TEXT NOT NULL,
+    frequency TEXT NOT NULL,
+    fare TEXT NOT NULL,
+    timing TEXT NOT NULL
+  );
+
+  -- BRTS (Pan-India)
+  CREATE TABLE IF NOT EXISTS brts_routes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    city TEXT NOT NULL DEFAULT 'Ahmedabad',
+    system_name TEXT NOT NULL DEFAULT 'BRTS',
+    route_number TEXT NOT NULL,
+    name TEXT NOT NULL,
+    from_stop TEXT NOT NULL,
+    to_stop TEXT NOT NULL,
+    total_stops INTEGER NOT NULL DEFAULT 0,
+    distance_km REAL NOT NULL DEFAULT 0,
+    fare INTEGER NOT NULL DEFAULT 10,
+    color TEXT NOT NULL DEFAULT '#FF6B00',
+    frequency_minutes INTEGER NOT NULL DEFAULT 10,
+    operating_hours TEXT NOT NULL DEFAULT '06:00-23:00',
+    type TEXT NOT NULL DEFAULT 'Regular',
+    polyline TEXT DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS brts_stops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    route_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (route_id) REFERENCES brts_routes(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS brts_path_points (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    route_id INTEGER NOT NULL,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (route_id) REFERENCES brts_routes(id) ON DELETE CASCADE
+  );
+
+  -- State Bus Transport (All-India SRTCs)
+  CREATE TABLE IF NOT EXISTS state_bus_routes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    operator TEXT NOT NULL DEFAULT 'GSRTC',
+    state TEXT NOT NULL DEFAULT 'Gujarat',
+    from_city TEXT NOT NULL,
+    to_city TEXT NOT NULL,
+    bus_type TEXT NOT NULL DEFAULT 'Express',
+    departure_time TEXT NOT NULL,
+    arrival_time TEXT NOT NULL,
+    duration TEXT NOT NULL,
+    distance_km REAL NOT NULL DEFAULT 0,
+    fare INTEGER NOT NULL DEFAULT 0,
+    fare_ac INTEGER DEFAULT 0,
+    frequency TEXT NOT NULL DEFAULT 'Daily',
+    depot TEXT NOT NULL DEFAULT '',
+    via TEXT DEFAULT ''
+  );
+
+  -- Alias table for backward compatibility
+  CREATE TABLE IF NOT EXISTS gsrtc_routes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    route_number TEXT NOT NULL,
+    from_city TEXT NOT NULL,
+    to_city TEXT NOT NULL,
+    bus_type TEXT NOT NULL DEFAULT 'Express',
+    departure_time TEXT NOT NULL,
+    arrival_time TEXT NOT NULL,
+    duration TEXT NOT NULL,
+    distance_km REAL NOT NULL DEFAULT 0,
+    fare INTEGER NOT NULL DEFAULT 0,
+    fare_ac INTEGER DEFAULT 0,
+    frequency TEXT NOT NULL DEFAULT 'Daily',
+    depot TEXT NOT NULL DEFAULT 'Ahmedabad',
+    via TEXT DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS gsrtc_bus_stands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    code TEXT NOT NULL UNIQUE,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    city TEXT NOT NULL DEFAULT 'Ahmedabad',
+    type TEXT NOT NULL DEFAULT 'Central'
+  );
 `);
 
-// Seed data if tables are empty
+// Seed Shuttle & Pilot Routes
 function seedIfEmpty() {
-  // Force re-seed for this update by checking if we have the new route resolution
-  const hasHighRes = db.prepare('SELECT COUNT(*) as c FROM path_points').get().c > 800;
-  if (hasHighRes) return;
+  const hasRoutes = db.prepare('SELECT COUNT(*) as c FROM routes').get().c > 0;
+  if (hasRoutes) return;
 
   console.log('Clearing old data and seeding database with TRUE road-aligned Ahmedabad routes...');
   db.exec('DELETE FROM reviews; DELETE FROM path_points; DELETE FROM stops; DELETE FROM drivers; DELETE FROM users; DELETE FROM routes;');
@@ -122,10 +319,10 @@ function seedIfEmpty() {
     {
       name: 'Gurukul Metro to Vastrapur', fare: 8, distance: 3.5, duration: '10 min', color: '#34A853',
       stops: [
-        { name: 'Gurukul Metro', lat: 23.0370, lng: 72.5400, passengers: 2, distance_label: '800 m' },
-        { name: 'Anand Nagar', lat: 23.0340, lng: 72.5330, passengers: 1, distance_label: '1.5 km' },
-        { name: 'Vastrapur Lake', lat: 23.0310, lng: 72.5230, passengers: 1, distance_label: '3.0 km' },
-        { name: 'Vastrapur', lat: 23.0290, lng: 72.5180, passengers: 0, distance_label: '3.5 km' },
+        { name: 'Gurukul Metro', lat: 23.0458, lng: 72.5350, passengers: 2, distance_label: '800 m' },
+        { name: 'Anand Nagar', lat: 23.0410, lng: 72.5320, passengers: 1, distance_label: '1.5 km' },
+        { name: 'Vastrapur Lake', lat: 23.0384, lng: 72.5289, passengers: 1, distance_label: '3.0 km' },
+        { name: 'Vastrapur', lat: 23.0350, lng: 72.5250, passengers: 0, distance_label: '3.5 km' },
       ],
       path: [[23.037145,72.539874],[23.037145,72.539874],[23.03746,72.540027],[23.037806,72.540195],[23.038131,72.540352],[23.038416,72.540491],[23.037865,72.541299],[23.035507,72.539383],[23.035435,72.539324],[23.035249,72.539169],[23.035427,72.538909],[23.035615,72.538634],[23.03597,72.538114],[23.036073,72.537964],[23.036433,72.537437],[23.0365,72.537339],[23.036657,72.537138],[23.036142,72.536888],[23.03584,72.536753],[23.035363,72.536494],[23.034899,72.536242],[23.034229,72.53589],[23.034042,72.535785],[23.033941,72.535696],[23.033847,72.535585],[23.033011,72.53487],[23.032215,72.534169],[23.031988,72.533969],[23.031731,72.533741],[23.031422,72.533517],[23.03063,72.533027],[23.030294,72.532821],[23.030178,72.532758],[23.029989,72.532656],[23.029503,72.532354],[23.029214,72.532157],[23.029053,72.532071],[23.02873,72.531929],[23.028373,72.531772],[23.028236,72.531711],[23.028144,72.53167],[23.028172,72.531602],[23.028208,72.531513],[23.028377,72.531151],[23.028665,72.530561],[23.028893,72.530095],[23.028974,72.529927],[23.028984,72.529908],[23.029597,72.528638],[23.029762,72.528309],[23.030664,72.527006],[23.030578,72.526924],[23.030553,72.52678],[23.030724,72.526623],[23.030971,72.526283],[23.031002,72.526241],[23.031141,72.526027],[23.03122,72.525906],[23.0314,72.525587],[23.031495,72.525247],[23.031568,72.524981],[23.031584,72.5249],[23.031639,72.524712],[23.031706,72.524507],[23.031892,72.523867],[23.031974,72.523548],[23.031952,72.523307],[23.032009,72.523167],[23.03206,72.523043],[23.032129,72.522873],[23.03217,72.522772],[23.032329,72.522259],[23.032401,72.522026],[23.032478,72.521931],[23.032602,72.521906],[23.033163,72.521851],[23.033294,72.521836],[23.033312,72.521747],[23.033303,72.521608],[23.033278,72.521397],[23.033225,72.519913],[23.033194,72.519201],[23.033126,72.51916],[23.033048,72.519162],[23.03274,72.518948],[23.03241,72.518713],[23.031769,72.518247],[23.031578,72.518111],[23.031519,72.518069],[23.031411,72.517996],[23.031372,72.517981],[23.031339,72.517973],[23.03128,72.51797],[23.030957,72.517978],[23.030803,72.517983],[23.030692,72.517979],[23.030474,72.517938],[23.029049,72.51783],[23.029948,72.517799],[23.029877,72.517759],[23.029846,72.51773],[23.029818,72.517701],[23.029795,72.517664],[23.029772,72.517621],[23.029759,72.517597]],
       driver: { name: 'Suresh Kumar', vehicleNumber: 'GJ01DL9012', rating: 3.8, totalRides: 890, profilePhoto: 'https://randomuser.me/api/portraits/men/75.jpg' }
@@ -169,5 +366,93 @@ function seedIfEmpty() {
 }
 
 seedIfEmpty();
+
+// ── Pan-India Transit Seeder ──
+function seedPanIndiaTransit() {
+  const hasAccurateBrts = db.prepare("SELECT COUNT(*) as c FROM brts_stops WHERE name = 'RTO Circle' AND lat > 23.065").get().c > 0;
+  if (hasAccurateBrts) return;
+
+  console.log('Seeding Pan-India & Ahmedabad Transit Network (Metros, Trains, BRTS, State Buses, Suburban)...');
+
+  const insertCity = db.prepare('INSERT OR REPLACE INTO cities (id, name, state, lat, lng, has_metro, has_brts, has_suburban, has_state_bus, state_bus_corp) VALUES (?,?,?,?,?,?,?,?,?,?)');
+  const insertMetroLine = db.prepare('INSERT INTO metro_lines (city, state, system_name, name, code, color, from_station, to_station, total_stations, total_distance_km, operating_hours, frequency_minutes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insertMetroStation = db.prepare('INSERT INTO metro_stations (line_id, name, lat, lng, sort_order, is_interchange, interchange_line_id, zone) VALUES (?,?,?,?,?,?,?,?)');
+  const insertSuburban = db.prepare('INSERT INTO suburban_trains (city, system, name, route, frequency, fare, timing) VALUES (?,?,?,?,?,?,?)');
+  const insertBrts = db.prepare('INSERT INTO brts_routes (city, system_name, route_number, name, from_stop, to_stop, total_stops, distance_km, fare, color, frequency_minutes, operating_hours, type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insertBrtsStop = db.prepare('INSERT INTO brts_stops (route_id, name, lat, lng, sort_order) VALUES (?,?,?,?,?)');
+  const insertStateBus = db.prepare('INSERT INTO state_bus_routes (operator, state, from_city, to_city, bus_type, departure_time, arrival_time, duration, distance_km, fare, fare_ac, frequency, depot, via) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insertTrain = db.prepare('INSERT OR REPLACE INTO trains (train_number, name, type, from_station, to_station, departure_time, arrival_time, duration, distance_km, runs_on, platform, fare_sleeper, fare_3ac, fare_2ac, fare_1ac, fare_chair_car, fare_exec_chair) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insertRailwayStation = db.prepare('INSERT OR REPLACE INTO railway_stations (name, code, lat, lng, city, state) VALUES (?,?,?,?,?,?)');
+  const insertBusStand = db.prepare('INSERT OR REPLACE INTO gsrtc_bus_stands (name, code, lat, lng, city, type) VALUES (?,?,?,?,?,?)');
+
+  const seedTransaction = db.transaction(() => {
+    // 1. Seed Cities
+    transitData.cities.forEach(c => {
+      insertCity.run(c.id, c.name, c.state, c.lat, c.lng, c.has_metro, c.has_brts, c.has_suburban, c.has_state_bus, c.state_bus_corp);
+    });
+
+    // 2. Seed Metros
+    db.exec('DELETE FROM metro_stations; DELETE FROM metro_lines;');
+    transitData.metroLines.forEach(line => {
+      const res = insertMetroLine.run(line.city, line.state, line.system, line.name, line.code, line.color, line.from, line.to, line.stations, line.dist, line.hours, line.freq);
+      const lineId = res.lastInsertRowid;
+      if (line.stationList) {
+        line.stationList.forEach((s, i) => {
+          insertMetroStation.run(lineId, s.name, s.lat, s.lng, i, s.is_interchange ? 1 : 0, null, s.zone || '');
+        });
+      }
+    });
+
+    // 3. Seed Suburban Local Trains
+    db.exec('DELETE FROM suburban_trains;');
+    transitData.suburbanTrains.forEach(st => {
+      insertSuburban.run(st.city, st.system, st.name, st.route, st.freq, st.fare, st.timing);
+    });
+
+    // 4. Seed Pan-India & Ahmedabad BRTS Networks
+    db.exec('DELETE FROM brts_stops; DELETE FROM brts_routes;');
+    transitData.brtsNetworks.forEach(brt => {
+      const res = insertBrts.run(brt.city, brt.system, brt.number, brt.name, brt.from, brt.to, brt.stops, brt.dist, brt.fare, '#FF6B00', brt.freq, brt.hours, 'Trunk Corridor');
+      const routeId = res.lastInsertRowid;
+      if (brt.stopList) {
+        brt.stopList.forEach((s, i) => {
+          insertBrtsStop.run(routeId, s.name, s.lat, s.lng, i);
+        });
+      }
+    });
+
+    // 5. Seed All-India State Transport Buses (SRTC)
+    db.exec('DELETE FROM state_bus_routes;');
+    transitData.stateBuses.forEach(b => {
+      insertStateBus.run(b.operator, b.state, b.from, b.to, b.type, b.dep, b.arr, b.arr, 0, b.fare, b.fareAc || 0, b.dep, b.operator, b.via || '');
+    });
+
+    // 6. Seed Pan-India Express & Vande Bharat Trains
+    transitData.panIndiaTrains.forEach(t => {
+      insertTrain.run(t.number, t.name, t.type, t.from, t.to, t.dep, t.arr, t.dur, t.dist, t.runs, t.plat, t.sl || 0, t.ac3 || 0, t.ac2 || 0, t.ac1 || 0, t.cc || 0, t.ec || 0);
+    });
+
+    // 7. Seed Railway Stations
+    if (transitData.railwayStations) {
+      db.exec('DELETE FROM railway_stations;');
+      transitData.railwayStations.forEach(rs => {
+        insertRailwayStation.run(rs.name, rs.code, rs.lat, rs.lng, rs.city, rs.state);
+      });
+    }
+
+    // 8. Seed GSRTC Bus Stands
+    if (transitData.gsrtcBusStands) {
+      db.exec('DELETE FROM gsrtc_bus_stands;');
+      transitData.gsrtcBusStands.forEach(bs => {
+        insertBusStand.run(bs.name, bs.code, bs.lat, bs.lng, bs.city, bs.type);
+      });
+    }
+  });
+
+  seedTransaction();
+  console.log('Pan-India & Ahmedabad Transit Database seeded successfully!');
+}
+
+seedPanIndiaTransit();
 
 module.exports = db;

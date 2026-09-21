@@ -16,7 +16,9 @@ import {
   createFAQsScreen,
   createSetRouteScreen
 } from './screens/secondary.js';
+import { createTransitScreen } from './screens/transit.js';
 import { createChatWidget } from './components/chatWidget.js';
+import { initInvestorBar } from './components/investorBar.js';
 
 // Register screens
 router.register('login', () => createAuthScreen(true));
@@ -28,6 +30,7 @@ router.register('map', (params) => createMapScreen(params));
 router.register('trip', (params) => createTripScreen(params));
 router.register('tracking', (params) => createTrackingScreen(params));
 router.register('add-route', () => createAddRouteScreen());
+router.register('transit', () => createTransitScreen());
 router.register('profile', () => createProfileScreen());
 router.register('settings', () => createSettingsScreen());
 router.register('support', () => createSupportScreen());
@@ -36,6 +39,7 @@ router.register('set-route', () => createSetRouteScreen());
 
 // Start
 document.addEventListener('DOMContentLoaded', () => {
+  initInvestorBar();
   router.navigate('splash');
   createChatWidget();
 });

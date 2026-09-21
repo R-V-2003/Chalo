@@ -1,0 +1,12 @@
+node_modules
+.git
+.github
+android
+dist
+dist-ssr
+.env
+.env.*
+*.local
+scratch
+*.db-wal
+*.db-shm

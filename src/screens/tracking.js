@@ -5,6 +5,9 @@ import { locationService } from '../services/location.js';
 import { api } from '../api.js';
 import { showToast } from '../utils/toast.js';
 
+import { openSafetyModal } from '../components/safetyModal.js';
+import { openReviewModal } from '../components/reviewModal.js';
+
 let trackingMap = null;
 let trackingAnimId = null;
 
@@ -23,6 +26,7 @@ export function createTrackingScreen(params = {}) {
 
   const origin = route.stops?.[0];
   const dest = route.stops?.[route.stops.length - 1];
+  const co2 = route.co2SavedKg || (route.distance * 0.18).toFixed(1);
 
   const screen = document.createElement('div');
   screen.className = 'screen map-screen';
@@ -36,25 +40,55 @@ export function createTrackingScreen(params = {}) {
           ${icons.arrowLeft}
         </div>
       </button>
-      <button class="btn-locate" id="tracking-recenter" aria-label="Re-center">
-        ${icons.crosshair}
-      </button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-locate" id="btn-safety-shield" title="Safety Shield & SOS" style="background:#22A147;color:white;font-weight:700;">
+          🛡️
+        </button>
+        <button class="btn-locate" id="tracking-recenter" aria-label="Re-center">
+          ${icons.crosshair}
+        </button>
+      </div>
     </div>
     <div class="bottom-sheet passenger-sheet" id="tracking-sheet">
       <div class="bottom-sheet-handle" id="tracking-sheet-toggle">${icons.chevronDown}</div>
       <div class="bottom-sheet-content" id="tracking-details">
         <div class="tracking-card">
-          <div class="tracking-status-badge">
+          
+          <!-- State Progression Header -->
+          <div class="tracking-state-timeline">
+            <div class="timeline-step active" id="step-enroute">
+              <span class="timeline-dot"></span>
+              <span class="timeline-text">En Route</span>
+            </div>
+            <div class="timeline-line"></div>
+            <div class="timeline-step" id="step-arriving">
+              <span class="timeline-dot"></span>
+              <span class="timeline-text">Arriving</span>
+            </div>
+            <div class="timeline-line"></div>
+            <div class="timeline-step" id="step-boarding">
+              <span class="timeline-dot"></span>
+              <span class="timeline-text">Board</span>
+            </div>
+            <div class="timeline-line"></div>
+            <div class="timeline-step" id="step-completed">
+              <span class="timeline-dot"></span>
+              <span class="timeline-text">Destination</span>
+            </div>
+          </div>
+
+          <div class="tracking-status-badge" id="tracking-status-pill">
             <span class="tracking-status-dot"></span>
-            DRIVER EN ROUTE
+            <span id="tracking-status-text">DRIVER EN ROUTE (~3 mins away)</span>
           </div>
 
           <div class="tracking-driver-row">
             <div class="tracking-driver-avatar">${icons.driverPhoto}</div>
             <div class="tracking-driver-info">
-              <div class="tracking-driver-name">${driver.name}</div>
-              <div class="tracking-vehicle-tag">${icons.autoRickshawSmall} ${driver.vehicle_number}</div>
+              <div class="tracking-driver-name">${driver.name} <span class="verified-badge" title="Chalo Verified Driver">✓ Verified</span></div>
+              <div class="tracking-vehicle-tag">${icons.autoRickshawSmall} ${driver.vehicle_number} • ⭐ ${driver.rating || 4.8}</div>
             </div>
+            <button class="btn-call-driver" id="btn-call-driver" title="Call Driver">📞</button>
           </div>
 
           <div class="tracking-route-strip">
@@ -71,24 +105,33 @@ export function createTrackingScreen(params = {}) {
 
           <div class="tracking-info-grid">
             <div class="tracking-info-item">
-              <div class="tracking-info-value">${route.duration || '~20 min'}</div>
-              <div class="tracking-info-label">ETA</div>
+              <div class="tracking-info-value">${route.duration || '~15 min'}</div>
+              <div class="tracking-info-label">Trip Time</div>
             </div>
             <div class="tracking-info-item">
               <div class="tracking-info-value">₹${route.fare}</div>
-              <div class="tracking-info-label">Fare</div>
+              <div class="tracking-info-label">Fixed Fare</div>
             </div>
             <div class="tracking-info-item">
-              <div class="tracking-info-value">${route.stops?.length || 0}</div>
-              <div class="tracking-info-label">Stops</div>
+              <div class="tracking-info-value">🌱 ${co2}kg</div>
+              <div class="tracking-info-label">CO₂ Saved</div>
             </div>
           </div>
 
-          <div class="tracking-msg">
-            Driver has been notified of your location and is heading towards you.
+          <!-- Quick Safety & Sharing Actions -->
+          <div class="tracking-safety-action-row">
+            <button class="btn-safety-pill-action" id="btn-open-sos">
+              <span>🆘</span> Emergency SOS
+            </button>
+            <button class="btn-safety-pill-action" id="btn-open-share">
+              <span>📤</span> Share Live Ride
+            </button>
           </div>
 
-          <button class="tracking-cancel-btn" id="btn-cancel-tracking">CANCEL REQUEST</button>
+          <div class="tracking-cta-row">
+            <button class="tracking-cancel-btn" id="btn-cancel-tracking">CANCEL</button>
+            <button class="btn-demo-complete-trip" id="btn-complete-trip">COMPLETE TRIP (DEMO)</button>
+          </div>
         </div>
       </div>
     </div>
@@ -219,6 +262,42 @@ function initTrackingMap(screen, route, driver) {
   screen.querySelector('#tracking-recenter')?.addEventListener('click', () => {
     const p = locationService.getPosition();
     trackingMap.flyTo([p.lat, p.lng], 14, { duration: 0.8 });
+  });
+
+  // Safety Shield Modal
+  const openSafety = () => openSafetyModal({ driver, route });
+  screen.querySelector('#btn-safety-shield')?.addEventListener('click', openSafety);
+  screen.querySelector('#btn-open-sos')?.addEventListener('click', openSafety);
+  screen.querySelector('#btn-open-share')?.addEventListener('click', openSafety);
+
+  // Call Driver Simulation
+  screen.querySelector('#btn-call-driver')?.addEventListener('click', () => {
+    alert(`📞 Calling ${driver.name} (+91 98765 43210)...\nConnecting secure in-app masked call.`);
+  });
+
+  // State Timeline simulation
+  const statusPill = screen.querySelector('#tracking-status-text');
+  const stepArriving = screen.querySelector('#step-arriving');
+  const stepBoarding = screen.querySelector('#step-boarding');
+  const stepCompleted = screen.querySelector('#step-completed');
+
+  setTimeout(() => {
+    if (statusPill) statusPill.textContent = 'SHUTTLE ARRIVING AT PICKUP (~1 min)';
+    if (stepArriving) stepArriving.classList.add('active');
+  }, 5000);
+
+  setTimeout(() => {
+    if (statusPill) statusPill.textContent = 'BOARD SHUTTLE • Auto at Stop';
+    if (stepBoarding) stepBoarding.classList.add('active');
+  }, 12000);
+
+  // Complete Trip (Demo trigger for Investor Showcase)
+  screen.querySelector('#btn-complete-trip')?.addEventListener('click', () => {
+    cleanup();
+    if (stepCompleted) stepCompleted.classList.add('active');
+    openReviewModal(driver, route, () => {
+      router.navigate('map');
+    });
   });
 
   // Cancel request

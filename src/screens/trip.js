@@ -3,6 +3,8 @@ import { icons } from '../utils/icons.js';
 import { router } from '../utils/router.js';
 import { api } from '../api.js';
 import { showToast } from '../utils/toast.js';
+import { walletService } from '../services/wallet.js';
+import { openWalletModal } from '../components/walletModal.js';
 
 function getDriverAvatar(name) {
   const initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -83,7 +85,22 @@ export function createTripScreen(params = {}) {
             </div>
           </div>
         </div>
-        <button class="btn-request-wait" id="btn-request-wait">REQUEST RIDE</button>
+
+        ${params.paidViaWallet ? `
+          <div style="margin-bottom:14px;padding:12px 14px;background:rgba(34,161,71,0.12);border:1.5px solid #22A147;border-radius:12px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.4rem;">⚡</span>
+            <div>
+              <div style="font-weight:900;font-size:0.9rem;color:#22A147;">PAID VIA CHALO WALLET (₹${params.fare || route.fare})</div>
+              <div style="font-size:0.75rem;color:var(--text-sec);font-weight:600;">Zero-lag auto settlement • Board shuttle directly</div>
+            </div>
+          </div>
+        ` : `
+          <button class="btn-wallet-pay-trip" id="btn-wallet-pay-trip" style="width:100%;margin-bottom:10px;padding:14px;background:linear-gradient(135deg, #F59E0B, #D97706);color:#000;border:none;border-radius:12px;font-weight:900;font-size:0.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(245,158,11,0.3);transition:transform 0.15s;">
+            <span>⚡</span> 1-Tap Pay ₹${route.fare} (CHALO Wallet)
+          </button>
+        `}
+
+        <button class="btn-request-wait" id="btn-request-wait">${params.paidViaWallet ? 'START LIVE JOURNEY' : 'REQUEST RIDE / PAY CASH'}</button>
         <div class="trip-expand-btn">${icons.chevronDown}</div>
         <div class="rating-section">
           <div class="star-rating" id="star-rating">${starsHtml}</div>
@@ -95,6 +112,26 @@ export function createTripScreen(params = {}) {
         </div>
       `;
 
+      // 1-Tap Wallet Pay Handler
+      const walletPayBtn = screen.querySelector('#btn-wallet-pay-trip');
+      walletPayBtn?.addEventListener('click', () => {
+        const fare = parseInt(route.fare) || 10;
+        const bal = walletService.getBalance();
+        if (bal < fare) {
+          showToast(`⚠️ Wallet balance (₹${bal}) is low. Top up to pay ₹${fare}.`);
+          openWalletModal();
+          return;
+        }
+        const success = walletService.payShuttleFare(fare, {
+          routeName: route.name,
+          driverName: driver.name
+        });
+        if (success) {
+          showToast(`⚡ ₹${fare} paid directly to ${driver.name} (Zero network lag)!`);
+          router.navigate('tracking', { route, driver, paidViaWallet: true });
+        }
+      });
+
       // Request to wait
       let selectedRating = 0;
       const waitBtn = screen.querySelector('#btn-request-wait');
@@ -103,8 +140,8 @@ export function createTripScreen(params = {}) {
           waitBtn.classList.add('requested');
           waitBtn.textContent = 'CONNECTING...';
           setTimeout(() => {
-            showToast('Driver notified of your location!');
-            router.navigate('tracking', { route, driver });
+            showToast(params.paidViaWallet ? 'Fast-pass verified with driver!' : 'Driver notified of your location!');
+            router.navigate('tracking', { route, driver, paidViaWallet: params.paidViaWallet });
           }, 800);
         }
       });
